@@ -101,7 +101,7 @@ streamlit run app.py
 *(If Streamlit or python is managed by `uv`, use: `uv run streamlit run app.py`)*
 
 ### 4. Ingest Sample Documents
-1. Open the Streamlit web interface (`http://localhost:8501`).
+1. Open the Streamlit web interface (`http://localhost:).
 2. Click **"🚀 Ingest & Build"** in the left sidebar to embed the sample documents located in `docs/`.
 3. Try any of the 3 quick-prompt buttons or type your own question!
 
