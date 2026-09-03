@@ -18,7 +18,7 @@ from rag.vectorstore import retrieve_documents, is_vectorstore_ready
 from tools.web_search import search_web
 
 
-GROQ_DEFAULT_MODEL = "llama3-70b-8192"
+GROQ_DEFAULT_MODEL = "llama-3.1-8b-instant"
 
 
 def get_llm(model_name: str = None, temperature: float = 0.0, api_key: str = None) -> ChatGroq:

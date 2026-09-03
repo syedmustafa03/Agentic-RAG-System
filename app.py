@@ -111,10 +111,61 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Imports from project modules
+import requests
 from graph.builder import build_graph, get_graph_mermaid_code, get_graph_png_bytes
 from rag.ingestion import load_documents_from_directory, load_uploaded_files, split_documents
 from rag.vectorstore import build_vectorstore, is_vectorstore_ready, clear_vectorstore, INDEX_DIR
 from langchain_core.documents import Document
+
+def fetch_groq_models(api_key: str):
+    """
+    Fetch active model list from Groq API using the user's API key.
+    Returns (dict_of_models, error_message_if_any).
+    """
+    # A robust default list in case fetch fails
+    default_models = {
+        "Llama 3.3 70B Versatile": "llama-3.3-70b-versatile",
+        "Llama 3.3 70B SpecDec": "llama-3.3-70b-specdec",
+        "Llama 3.1 8B Instant": "llama-3.1-8b-instant",
+        "Mixtral 8x7B Instruct": "mixtral-8x7b-32768",
+        "Gemma 2 9B IT": "gemma2-9b-it",
+    }
+    if not api_key:
+        return default_models, None
+
+    try:
+        response = requests.get(
+            "https://api.groq.com/openai/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=5
+        )
+        if response.status_code == 200:
+            data = response.json().get("data", [])
+            fetched = {}
+            for m in data:
+                m_id = m.get("id", "")
+                # Skip non-text models
+                if any(x in m_id.lower() for x in ["whisper", "guard", "audio"]):
+                    continue
+                # Build user-friendly label
+                label = m_id.replace("-", " ").title()
+                fetched[label] = m_id
+            
+            if fetched:
+                # Sort alphabetically by label
+                sorted_fetched = {k: fetched[k] for k in sorted(fetched.keys())}
+                return sorted_fetched, None
+            return default_models, "API returned no text models."
+        else:
+            try:
+                err_info = response.json()
+                err_msg = err_info.get("error", {}).get("message", response.text)
+            except Exception:
+                err_msg = f"HTTP Status {response.status_code}"
+            return default_models, err_msg
+    except Exception as e:
+        return default_models, f"Connection error: {str(e)}"
+
 
 # Initialize session states
 if "messages" not in st.session_state:
@@ -166,22 +217,33 @@ with st.sidebar:
 
     # Model Selector
     with st.expander("🤖 Groq Model", expanded=True):
-        GROQ_MODELS = {
-            "Llama 3 70B (Recommended)": "llama3-70b-8192",
-            "Llama 3 8B (Fastest)": "llama3-8b-8192",
-            "Llama 3.1 8B Instant": "llama-3.1-8b-instant",
-            "Mixtral 8x7B": "mixtral-8x7b-32768",
-            "Gemma2 9B": "gemma2-9b-it",
-        }
+        api_key = os.environ.get("GROQ_API_KEY", "")
+        GROQ_MODELS, err = fetch_groq_models(api_key)
+        
+        if err:
+            st.warning(f"⚠️ {err}")
+            st.caption("Using default model list fallback.")
+        
+        # Check if we should find a default selection
+        default_index = 0
+        preferred_models = ["llama-3.3-70b-versatile", "llama3-70b-8192", "llama-3.1-8b-instant"]
+        model_ids = list(GROQ_MODELS.values())
+        model_labels = list(GROQ_MODELS.keys())
+        
+        for pref in preferred_models:
+            if pref in model_ids:
+                default_index = model_ids.index(pref)
+                break
+
         selected_model_label = st.selectbox(
             "Select Model",
-            options=list(GROQ_MODELS.keys()),
-            index=0,
-            help="All models are available on Groq's free tier. Llama 3 70B gives the best results."
+            options=model_labels,
+            index=default_index,
+            help="Showing models currently available to your Groq API key."
         )
         selected_model_id = GROQ_MODELS[selected_model_label]
         os.environ["GROQ_MODEL"] = selected_model_id
-        st.caption(f"`{selected_model_id}`")
+        st.caption(f"Active Model: `{selected_model_id}`")
 
     st.markdown("---")
 
